@@ -18,6 +18,11 @@ import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.HttpURLConnection;
+import java.net.CookieHandler;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
+import java.net.ProtocolException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
@@ -30,11 +35,55 @@ import jmc.beans.Contenido;
 import jmc.beans.Enlace;
 
 
+
+
 public class Jmcrawl implements Serializable {
 
     public static Properties props;
-
     public static List<Enlace> enlaces(String url) throws JMCException {
+
+        
+        List<Enlace> lc = new ArrayList();
+
+        try {
+
+            Document doc = Jsoup.parse(archivoRemoto(url), "UTF-8");
+            List<Element> le = doc.getElementsByTag("a");
+
+            for (Element e : le) {
+                String atr = e.attr("href");
+                if (atr != null 
+                        && !atr.equals ("/") && !atr.equals("#") 
+                        && (url.replace("http://", "").replace("https://", "").split("/")[0])
+                        .equals(atr.replace("http://", "").replace("https://", "").split("/")[0])
+                        && !url.equals(atr)
+                    ) 
+                {
+
+                    Enlace c = new Enlace();
+                    c.setUrl(atr);
+
+                    List<String> ltg = new ArrayList(Arrays.asList(atr.replace("http://", "").replace("http://", "").split("/")));
+                    c.setTags(ltg);
+
+                    if (lc.isEmpty()) {
+                        lc.add(c);
+                    } else {
+                        if (!existeEnlace(lc, c)) {
+                            lc.add(c);
+                        }
+                    }
+                }
+            }
+
+        } catch (IOException e) {
+            throw new JMCException(e);
+        }
+
+        return lc;
+    }
+    
+    public static List<Enlace> enlaces(String url, String host) throws JMCException {
 
         List<Enlace> lc = new ArrayList();
 
@@ -45,12 +94,15 @@ public class Jmcrawl implements Serializable {
 
             for (Element e : le) {
                 String atr = e.attr("href");
-                if (
-                        (url.replace("http://", "").replace("https://", "").split("/")[0])
-                        .equals(atr.replace("http://", "").replace("https://", "").split("/")[0]) 
-                        && 
-                        !url.equals(atr)
-                   ) 
+                
+                if (!atr.contains(host)) atr = host+atr;
+                
+                if (atr != null 
+                        && !atr.equals ("/") && !atr.equals("#") 
+                        && (url.replace("http://", "").replace("https://", "").split("/")[0])
+                        .equals(atr.replace("http://", "").replace("https://", "").split("/")[0])
+                        && !url.equals(atr)
+                    ) 
                 {
 
                     Enlace c = new Enlace();
@@ -76,53 +128,18 @@ public class Jmcrawl implements Serializable {
         return lc;
     }
 
-    public static List<Contenido> contenido(List<Enlace> le) throws JMCException {
-        
-        List<Contenido> lc = new ArrayList();
-
-        try {
-            for (Enlace e : le) {
-                Contenido c = new Contenido();
-                c.setEnlace(e);
-                Document doc = Jsoup.parse(archivoRemoto(e.getUrl()), "utf-8");
-                c.setTitulo(doc.getElementsByClass(props.getProperty("class_titulo")).text());
-                
-                String[] classTexto = props.getProperty("class_texto").split(",");
-                String texto = "";
-                
-                for (String ct : classTexto) {
-                    texto += doc.getElementsByClass(ct).text()+" ";
-                }                
-                
-                c.setContenido(texto);
-                c.setFecha(doc.getElementsByClass(props.getProperty("class_fecha")).text());
-                
-                String autor = "";
-                String[] classAutor = props.getProperty("class_autor").split(",");
-                
-                for (String ct : classAutor) {
-                   autor += doc.getElementsByClass(ct).text()+" ";
-                }
-                
-                c.setAutor(autor);
-                lc.add(c);
-            }
-        } catch (IOException e) {
-            throw new JMCException(e);
-        }
-
-        return lc;
-    }
-
     public static File archivoRemoto(String url) throws JMCException {
 
         File f = null;
 
         try {
-
+            CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
             URL ur = new URL(url);
-            URLConnection cn = ur.openConnection();
+            HttpURLConnection cn = (HttpURLConnection) ur.openConnection();
+
             cn.setRequestProperty("user-agent", props.getProperty("navegador"));
+            cn.setInstanceFollowRedirects(false);
+            cn.setUseCaches(false);            
             cn.connect();
 
             BufferedReader br = new BufferedReader(new InputStreamReader(cn.getInputStream()));
@@ -133,7 +150,7 @@ public class Jmcrawl implements Serializable {
 
             if (creado) {
 
-                String archFile = ur.getFile().equals("/") ? "index.html" : ur.getFile().replace("/", "_")+".html";
+                String archFile = ur.getFile().equals("/") ? "index.html" : ur.getFile().replace("/", "_") + ".html";
                 String archivo = dirTempHtml + archFile;
                 String linea = null;
 
@@ -145,6 +162,10 @@ public class Jmcrawl implements Serializable {
                 bw.close();
             }
 
+            cn.disconnect();
+        } catch (ProtocolException e) {
+            //return archivoRemoto(url);
+            e.printStackTrace();
         } catch (IOException e) {
             throw new JMCException(e);
         }
@@ -152,6 +173,7 @@ public class Jmcrawl implements Serializable {
         return f;
     }
 
+    
     private static boolean existeEnlace(List<Enlace> l, Enlace s) {
         boolean existe = false;
 

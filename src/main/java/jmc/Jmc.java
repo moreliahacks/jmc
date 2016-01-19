@@ -9,106 +9,94 @@ package jmc;
  *
  * @author miguel
  */
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.Properties;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.TransformerException;
-import org.w3c.dom.Document;
-import org.json.JSONArray;
+import java.lang.InterruptedException;
+import java.lang.reflect.Method;
+import java.util.List;
+import jmc.beans.Contenido;
+import jmc.beans.Enlace;
 import jmc.proc.Jmcrawl;
 import jmc.util.ConfigPropiedades;
-import jmc.util.Convertidor;
+import jmc.util.UtlFbComents;
 import jmc.exception.JMCException;
+
 
 public class Jmc {
 
-    /**
-     * @param args the command line arguments
-     */
+    private static final boolean DEBUG = false;
+    
     public static void main(String[] args) {
 
-        String opcion;
-        opcion = args != null ? (args[0]).toLowerCase() : "xml";
+        if (args[0].equals("scrap") && args[1].matches("^[0-9]+") && args[2].matches("^[0-9]+")) {
 
-        if (opcion != null) {
+            int pagsInicio = args[1].matches("^[0-9]+") ? Integer.valueOf(args[1]) : 1;
+            int pags = args[1].matches("^[0-9]+") ? Integer.valueOf(args[2]) : 10;
+            String clase = args[3];
+
             try {
-                Properties props = ConfigPropiedades.getProperties("props_config.properties");
-                String sitio = props.getProperty("sitio");
-                Jmcrawl.props = props;
+                
+                Class jq = Class.forName(clase);
+                Object ob = jq.newInstance();
 
-                switch (opcion) {
-                    case "json":
+                Class[] chc = new Class[1];
+                Object[] coc = new Object[1];
+                Method mtt = jq.getMethod("getHost");
+                String host = String.valueOf(mtt.invoke(ob, null));
 
-                        try {
-                            JSONArray arn = Convertidor.JSON(Jmcrawl.contenido(Jmcrawl.enlaces(sitio)));
+                Jmcrawl.props = ConfigPropiedades.getProperties("props_config.properties");
 
-                            PrintWriter f = null;
+                for (int i = pagsInicio; i < pags; i++) {
 
-                            if (args != null && args.length == 2 && args[1] != null) {
-                                f = new PrintWriter(args[1]);
-                            }
+                    String sitio = Jmcrawl.props.getProperty(clase).replace("$i", String.valueOf(i));
+                    System.out.println("#### Crawl Sitio: " + sitio+ " ####");
+                    List<Enlace> len = Jmcrawl.enlaces(sitio, host);
 
-                            for (int i = 0; i < arn.length(); i++) {
-                                if (f != null) {
-                                    f.println(arn.get(i));
-                                } else {
-                                    System.out.println(arn.get(i));
+                    for (Enlace e : len) {
+                        if (!Contenido.existeContenidoURL(e.getUrl().trim())) {
+                            Class[] cl = new Class[1];
+                            Object[] obj = new Object[1];
+                            cl[0] = Class.forName("jmc.beans.Enlace");
+                            Method mt = jq.getMethod("contenido", cl);
+                            obj[0] = mt.invoke(ob, e);
+                            Contenido c = (Contenido) obj[0];
+
+                            if (!DEBUG) {
+                                if (c != null && c.getContenido() != null) {
+                                    Contenido.agrContenido(c);
                                 }
                             }
-
-                            if (f != null) {
-                                f.close();
-                            }
-
-                        } catch (JMCException e) {
-                            System.out.println(e);
                         }
-
-                        break;
-                    case "xml":
-
-                        try {
-                            Document doc = Convertidor.DOM(Jmcrawl.contenido(Jmcrawl.enlaces(sitio)));
-                            DOMSource domSource = new DOMSource(doc);
-                            StringWriter writer = new StringWriter();
-                            StreamResult result = new StreamResult(writer);
-                            TransformerFactory tf = TransformerFactory.newInstance();
-                            Transformer transformer = tf.newTransformer();                            
-                            transformer.transform(domSource, result);
-                            
-                            PrintWriter out = null;
-
-                            if (args != null && args.length == 2 && args[1] != null) {
-                                out = new PrintWriter(args[1]);
-                                out.println(writer.toString());
-                            } else {
-                                System.out.println(writer.toString());
-                            }
-
-                            writer.close();
-
-                        } catch (TransformerException e) {
-                            System.out.println(e);
-                        } catch (JMCException e) {
-                            System.out.println(e);
-                        }
-                        break;
-                    default:
-                        System.out.println("USAR: java -jar jmc.jar [<default> json|xml] (opcional) archivoDestino ...");
-                        break;
+                    }
                 }
-            } catch (IOException e) {
-                System.out.println(e);
-            }
-        } else {
-            System.out.println("USAR: java -jar jmc.jar [<default> json|xml] (opcional) archivoDestino ...");
-        }
 
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        } else if (args[0] != null && args[0].equals("act-fbc") && args[1].matches("^[0-9]+") && args[2].matches("^[0-9]+")) {
+         
+          try {              
+            List<Contenido> lc = Contenido.getContenido("Where cont_sitio = '"+args[1]+"'");            
+            int i = 1;
+            for (Contenido c : lc) {
+                System.out.println(i+") Comentarios para: "+c.getEnlaceURL());
+                if (i == 200) {
+                  i = 1;
+                  Thread.sleep(30000);
+                }
+                UtlFbComents.getComentarios(c.getContId(), Long.valueOf(args[2]));               
+             i++;   
+            }            
+            
+          } catch (JMCException e) {
+              e.printStackTrace();
+          } catch (InterruptedException e) {
+              e.printStackTrace();
+          }
+                       
+        } else {
+            System.out.println("Usar: java -jar jmc.jar [scrap] [<numero de paginas (default: 10)>] [jmc.proc.JmcCBScrap | jmc.proc.JmcMMScrap | jmc.proc.JmcCHANScrap | jmc.proc.JmcExtraScrap | jmc.proc.JmcLAVOZScrap | jmc.proc.JmcQUAScrap ...] ");
+            System.out.println("Usar: java -jar jmc.jar [act-fbc] [1-10 <cadena_sitio_busqueda>] [<numero comentarios>]");
+        }
     }
 
 }
