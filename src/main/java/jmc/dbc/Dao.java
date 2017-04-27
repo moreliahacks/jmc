@@ -75,6 +75,19 @@ public class Dao {
         }
         return rst;
     }
+	
+	public PreparedStatement consultarSec(String sql) throws JMCException {
+		
+		try {
+			
+			pstm = conn.preparedStatement(sql);
+			
+		} catch (SQLException e) {
+			throw new JMCException(e);
+		}
+		
+		result pstm;		
+	}
 
     public int actualizar(String sql, List<SQLParams> lParams) throws JMCException {
         return this.modificar(sql, lParams);

@@ -7,6 +7,13 @@
     <groupId>jmc</groupId>
     <artifactId>jmc</artifactId>
     <version>0.01-SNAPSHOT</version>
+    <packaging>jar</packaging>
+        
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.7</maven.compiler.source>
+        <maven.compiler.target>1.7</maven.compiler.target>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -37,7 +44,8 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
+                <version>3.0.2</version>
+                 <configuration>
                     <archive>
                         <manifest>
                             <mainClass>jmc.Jmc</mainClass>
