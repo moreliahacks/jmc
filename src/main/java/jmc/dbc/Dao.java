@@ -80,13 +80,13 @@ public class Dao {
 		
 		try {
 			
-			pstm = conn.preparedStatement(sql);
+			pstm = conn.prepareStatement(sql);
 			
 		} catch (SQLException e) {
 			throw new JMCException(e);
 		}
 		
-		result pstm;		
+		return pstm;		
 	}
 
     public int actualizar(String sql, List<SQLParams> lParams) throws JMCException {
